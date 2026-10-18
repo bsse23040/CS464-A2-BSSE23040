@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -22,11 +23,22 @@ public class PlayerController : MonoBehaviour
     [SerializeField] float checkRadius = 0.4f;         // a bit smaller than the capsule, so a wall never counts as ground
     [SerializeField] LayerMask groundMask;             // only the Ground layer, never the player's own capsule
 
+    [Header("Juice: squash on landing")]
+    [SerializeField] Transform body;                   // the mesh child. It is squashed, the collider keeps its size
+    [SerializeField] float squashDuration = 0.35f;     // seconds
+    [SerializeField] float softSquash = 0.85f;         // body height after the lightest landing that squashes
+    [SerializeField] float hardSquash = 0.7f;          // body height after a hard landing
+    [SerializeField] float minAirTime = 0.1f;          // seconds in the air before a landing counts
+    [SerializeField] float minFallSpeed = 3f;          // m/s: a small drop, like a stair step, does not squash
+
     Rigidbody rb;
     InputAction moveAction, jumpAction;
     Vector3 move;                                      // built in Update, used in FixedUpdate
     bool isGrounded, jumpQueued;
     float lastGroundedTime = -1f, lastPressedTime = -1f;   // both windows are timestamps, checked in Update
+    float airTime, fallSpeed;
+    bool wasGrounded;
+    Coroutine squash;
 
     void Awake()
     {
@@ -59,6 +71,21 @@ public class PlayerController : MonoBehaviour
             lastGroundedTime = -1f;          // the jump uses up both windows
             lastPressedTime = -1f;
         }
+
+        // the landing that starts the juice
+        if (!isGrounded)
+        {
+            airTime += Time.deltaTime;
+            // Dot with Vector3.down is positive while we move down and negative while we rise
+            fallSpeed = Mathf.Max(fallSpeed, Vector3.Dot(rb.linearVelocity, Vector3.down));
+        }
+        else
+        {
+            if (!wasGrounded && airTime > minAirTime && fallSpeed > minFallSpeed) StartSquash(fallSpeed);
+            airTime = 0f;
+            fallSpeed = 0f;
+        }
+        wasGrounded = isGrounded;
     }
 
     void FixedUpdate()
@@ -82,6 +109,31 @@ public class PlayerController : MonoBehaviour
         // fall faster than we rise: extra gravity while falling, so the apex stays the same but the fall is shorter
         if (rb.linearVelocity.y < 0f)
             rb.AddForce(Physics.gravity * (fallMultiplier - 1f), ForceMode.Acceleration);
+    }
+
+    void StartSquash(float impact)
+    {
+        if (body == null) return;
+        if (squash != null) StopCoroutine(squash);                   // stop a running one first
+        float hard = Mathf.InverseLerp(minFallSpeed, 9f, impact);    // 0 for a soft landing, 1 for a hard one
+        squash = StartCoroutine(Squash(Mathf.Lerp(softSquash, hardSquash, hard)));
+    }
+
+    // squashed at p = 0, at rest at p = 1, with a small overshoot from Ease.OutBack
+    IEnumerator Squash(float lowestHeight)
+    {
+        for (float elapsed = 0f; elapsed < squashDuration; elapsed += Time.deltaTime)
+        {
+            float p = Ease.OutBack(elapsed / squashDuration);
+            float y = Mathf.LerpUnclamped(lowestHeight, 1f, p);      // unclamped, or the overshoot is cut flat
+            float xz = 1f / Mathf.Sqrt(y);                           // keep the volume: at y 0.7, x and z are about 1.2
+            body.localScale = new Vector3(xz, y, xz);
+            body.localPosition = new Vector3(0f, y, 0f);             // the body is 2 m tall around its middle, so its feet stay put
+            yield return null;
+        }
+        body.localScale = Vector3.one;                               // exactly at rest
+        body.localPosition = new Vector3(0f, 1f, 0f);
+        squash = null;
     }
 
     // select the Player to see the ground check: green when it touches ground, red when it does not

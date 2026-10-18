@@ -90,7 +90,7 @@ public static class LevelBuilder
         col.height = 2f; col.radius = 0.5f; col.center = new Vector3(0, 1, 0);
         col.sharedMaterial = NoFriction();
 
-        Prim(PrimitiveType.Capsule, "Body", new Vector3(0, 1, 0), Vector3.one, mat, root.transform, false);
+        var bodyMesh = Prim(PrimitiveType.Capsule, "Body", new Vector3(0, 1, 0), Vector3.one, mat, root.transform, false);
 
         var feet = new GameObject("Feet");
         feet.transform.SetParent(root.transform, false);
@@ -99,6 +99,7 @@ public static class LevelBuilder
         var pc = root.AddComponent<PlayerController>();
         var so = new SerializedObject(pc);
         so.FindProperty("feet").objectReferenceValue = feet.transform;
+        so.FindProperty("body").objectReferenceValue = bodyMesh.transform;
         so.FindProperty("groundMask").intValue = 1 << GroundLayer;
         so.ApplyModifiedPropertiesWithoutUndo();
 

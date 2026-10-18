@@ -229,3 +229,9 @@ MonoBehaviour:
   groundMask:
     serializedVersion: 2
     m_Bits: 64
+  body: {fileID: 6024034869506111018}
+  squashDuration: 0.35
+  softSquash: 0.85
+  hardSquash: 0.7
+  minAirTime: 0.1
+  minFallSpeed: 3
