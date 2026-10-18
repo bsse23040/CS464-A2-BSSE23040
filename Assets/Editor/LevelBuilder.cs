@@ -252,14 +252,15 @@ public static class LevelBuilder
     static void Begin()
     {
         EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+        if (Camera.main != null) Object.DestroyImmediate(Camera.main.gameObject);   // every level uses the Camera prefab instead
+        var cam = (GameObject)PrefabUtility.InstantiatePrefab(prefabs["Camera"]);
+        cam.name = "Camera";
         root = new GameObject("Level").transform; group = null;
     }
     static void Spawn(float x, float y, float z)
     {
         var p = Raw("SpawnPad", new Vector3(x, y + .05f, z)); p.name = "Spawn";
-        var pl = Raw("Player", new Vector3(x, y + 1f, z)); pl.name = "Player";
-        var cam = Camera.main;
-        if (cam != null) { cam.transform.position = new Vector3(x, y + 4f, z - 8f); cam.transform.rotation = Quaternion.Euler(18, 0, 0); }
+        var pl = Raw("Player", new Vector3(x, y + .12f, z)); pl.name = "Player";   // the pivot is at the feet; the pad's top is at y + 0.1
     }
     static void Goal(float x, float y, float z) { var g = Raw("Goal", new Vector3(x, y, z)); g.name = "Goal"; }
 
