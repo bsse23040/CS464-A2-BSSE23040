@@ -63,6 +63,48 @@ public static class LevelBuilder
         Object.DestroyImmediate(g);
     }
 
+    // zero friction with Friction Combine = Minimum, so the player does not stick to walls in mid-air
+    static PhysicsMaterial NoFriction()
+    {
+        const string path = "Assets/Materials/PlayerNoFriction.asset";
+        var m = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(path);
+        if (m == null) { m = new PhysicsMaterial("PlayerNoFriction"); AssetDatabase.CreateAsset(m, path); }
+        m.dynamicFriction = 0f; m.staticFriction = 0f; m.bounciness = 0f;
+        m.frictionCombine = PhysicsMaterialCombine.Minimum;
+        EditorUtility.SetDirty(m);
+        return m;
+    }
+
+    // The Player: an empty root with a Rigidbody, a capsule collider (height 2, radius 0.5) and PlayerController.
+    // The mesh is a child, Body, with no collider. The pivot is at the player's feet.
+    static void BuildPlayer(Material mat)
+    {
+        var root = new GameObject("Player");
+        var rb = root.AddComponent<Rigidbody>();
+        rb.mass = 1f;
+        rb.constraints = RigidbodyConstraints.FreezeRotation;
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
+        rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+
+        var col = root.AddComponent<CapsuleCollider>();
+        col.height = 2f; col.radius = 0.5f; col.center = new Vector3(0, 1, 0);
+        col.sharedMaterial = NoFriction();
+
+        Prim(PrimitiveType.Capsule, "Body", new Vector3(0, 1, 0), Vector3.one, mat, root.transform, false);
+
+        var feet = new GameObject("Feet");
+        feet.transform.SetParent(root.transform, false);
+        feet.transform.localPosition = new Vector3(0, 0.35f, 0);     // a 0.4 m sphere here reaches 5 cm below the feet
+
+        var pc = root.AddComponent<PlayerController>();
+        var so = new SerializedObject(pc);
+        so.FindProperty("feet").objectReferenceValue = feet.transform;
+        so.FindProperty("groundMask").intValue = 1 << GroundLayer;
+        so.ApplyModifiedPropertiesWithoutUndo();
+
+        Save(root, "Player", false);
+    }
+
     static void BuildKit()
     {
         EnsureFolder("Assets", "Prefabs"); EnsureFolder("Assets", "Materials"); EnsureFolder("Assets", "Scenes");
@@ -89,7 +131,7 @@ public static class LevelBuilder
         Save(Prim(PrimitiveType.Cube, "Strip", Vector3.zero, new Vector3(1, .05f, 1), strip, null, false), "Strip", false);
         Save(Prim(PrimitiveType.Sphere, "Coin", Vector3.zero, new Vector3(.4f, .4f, .4f), coin, null, false), "Coin", false);
         Save(Prim(PrimitiveType.Cube, "SpawnPad", Vector3.zero, new Vector3(3, .1f, 3), spawn), "SpawnPad");
-        Save(Prim(PrimitiveType.Capsule, "Player", Vector3.zero, Vector3.one, player), "Player", false); // 2 m tall, 1 m wide
+        BuildPlayer(player);
 
         var door = new GameObject("WallDoor"); // 4 m module, 2 m x 2.5 m opening
         Prim(PrimitiveType.Cube, "JambL", new Vector3(-1.5f, 1.5f, 0), new Vector3(1, 3, .4f), wall, door.transform);
