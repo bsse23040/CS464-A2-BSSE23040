@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 2678547881942574127}
   - component: {fileID: 6987973673084436905}
   - component: {fileID: 7420740353701145188}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: FloorDark
   m_TagString: Untagged
   m_Icon: {fileID: 0}

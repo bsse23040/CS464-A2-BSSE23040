@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 7212291508142021064}
   - component: {fileID: 3880293474348458863}
   - component: {fileID: 8044468763661526237}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Pad
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -121,7 +121,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8802765264485359592}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Goal
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -158,7 +158,7 @@ GameObject:
   - component: {fileID: 2188816048435253675}
   - component: {fileID: 6482116390845456452}
   - component: {fileID: 1877931273894096744}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Beam
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -249,7 +249,7 @@ GameObject:
   - component: {fileID: 5482854609455624038}
   - component: {fileID: 6434938174444060105}
   - component: {fileID: 8299017761277793715}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Flag
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -361,7 +361,7 @@ GameObject:
   - component: {fileID: 4284208995730621894}
   - component: {fileID: 3127441509788859688}
   - component: {fileID: 3001320480812844372}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Pole
   m_TagString: Untagged
   m_Icon: {fileID: 0}

@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 3215316706942223369}
   - component: {fileID: 5453311800963121917}
   - component: {fileID: 9033391053228950819}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: SpawnPad
   m_TagString: Untagged
   m_Icon: {fileID: 0}

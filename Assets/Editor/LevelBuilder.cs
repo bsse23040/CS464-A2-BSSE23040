@@ -52,8 +52,13 @@ public static class LevelBuilder
         return g;
     }
 
-    static void Save(GameObject g, string name)
+    const int GroundLayer = 6;   // the "Ground" layer in ProjectSettings/TagManager.asset
+    static void SetLayerAll(GameObject g, int layer) { g.layer = layer; foreach (Transform t in g.transform) SetLayerAll(t.gameObject, layer); }
+
+    // everything the player can stand on goes on the Ground layer, so the player's ground check can ignore itself
+    static void Save(GameObject g, string name, bool ground = true)
     {
+        if (ground) SetLayerAll(g, GroundLayer);
         prefabs[name] = PrefabUtility.SaveAsPrefabAsset(g, PrefabDir + "/" + name + ".prefab");
         Object.DestroyImmediate(g);
     }
@@ -81,10 +86,10 @@ public static class LevelBuilder
         Save(Prim(PrimitiveType.Cube, "Step", Vector3.zero, new Vector3(3, .3f, .6f), floor), "Step");
         Save(Prim(PrimitiveType.Cube, "Ramp", Vector3.zero, new Vector3(4, .3f, 7), floor), "Ramp");
         Save(Prim(PrimitiveType.Cube, "Landmark", Vector3.zero, new Vector3(2, 14, 2), lmk), "Landmark");
-        Save(Prim(PrimitiveType.Cube, "Strip", Vector3.zero, new Vector3(1, .05f, 1), strip, null, false), "Strip");
-        Save(Prim(PrimitiveType.Sphere, "Coin", Vector3.zero, new Vector3(.4f, .4f, .4f), coin, null, false), "Coin");
+        Save(Prim(PrimitiveType.Cube, "Strip", Vector3.zero, new Vector3(1, .05f, 1), strip, null, false), "Strip", false);
+        Save(Prim(PrimitiveType.Sphere, "Coin", Vector3.zero, new Vector3(.4f, .4f, .4f), coin, null, false), "Coin", false);
         Save(Prim(PrimitiveType.Cube, "SpawnPad", Vector3.zero, new Vector3(3, .1f, 3), spawn), "SpawnPad");
-        Save(Prim(PrimitiveType.Capsule, "Player", Vector3.zero, Vector3.one, player), "Player"); // 2 m tall, 1 m wide
+        Save(Prim(PrimitiveType.Capsule, "Player", Vector3.zero, Vector3.one, player), "Player", false); // 2 m tall, 1 m wide
 
         var door = new GameObject("WallDoor"); // 4 m module, 2 m x 2.5 m opening
         Prim(PrimitiveType.Cube, "JambL", new Vector3(-1.5f, 1.5f, 0), new Vector3(1, 3, .4f), wall, door.transform);
@@ -102,7 +107,7 @@ public static class LevelBuilder
         var l = new GameObject("LightPoint");
         var lt = l.AddComponent<Light>();
         lt.type = LightType.Point; lt.color = new Color(1f, .85f, .6f); lt.intensity = 25f; lt.range = 14f;
-        Save(l, "LightPoint");
+        Save(l, "LightPoint", false);
         AssetDatabase.SaveAssets();
     }
 
@@ -335,6 +340,14 @@ public static class LevelBuilder
         RampZ(0, 69, 0, 76, 2.4f, 4); Block(-3, 76, 3, 80, 2.4f);
         Group("Goal"); Block(-4, 82.8f, 4, 90, 2.4f); Goal(0, 2.4f, 86);
         Finish(5);
+    }
+
+    [MenuItem("CS464/Build Kit Only")]
+    public static void BuildKitOnly()
+    {
+        BuildKit();
+        AssetDatabase.SaveAssets();
+        Debug.Log("[LevelBuilder] kit built");
     }
 
     [MenuItem("CS464/Build Kit + Levels")]
