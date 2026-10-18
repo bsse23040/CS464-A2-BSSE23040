@@ -13,6 +13,9 @@ public class PlayerController : MonoBehaviour
 
     [Header("Jump")]
     [SerializeField] float jumpHeight = 1.8f;          // metres
+    [SerializeField] float fallMultiplier = 2.2f;      // extra gravity on the way down only
+    [SerializeField] float coyoteTime = 0.1f;          // a press this long after leaving a ledge still jumps
+    [SerializeField] float jumpBuffer = 0.12f;         // a press this long before landing jumps when we land
 
     [Header("Ground check")]
     [SerializeField] Transform feet;                   // the check sphere is centred here
@@ -23,6 +26,7 @@ public class PlayerController : MonoBehaviour
     InputAction moveAction, jumpAction;
     Vector3 move;                                      // built in Update, used in FixedUpdate
     bool isGrounded, jumpQueued;
+    float lastGroundedTime = -1f, lastPressedTime = -1f;   // both windows are timestamps, checked in Update
 
     void Awake()
     {
@@ -41,7 +45,20 @@ public class PlayerController : MonoBehaviour
         Vector2 input = moveAction.ReadValue<Vector2>();
         move = Vector3.ClampMagnitude(new Vector3(input.x, 0f, input.y), 1f);   // diagonals are not faster
 
-        if (jumpAction.WasPressedThisFrame() && isGrounded) jumpQueued = true;
+        bool jumpPressed = jumpAction.WasPressedThisFrame();
+
+        // stamp the ground only when no jump is queued and we are not rising, or a quick second press would jump again
+        if (isGrounded && !jumpQueued && rb.linearVelocity.y <= 0f) lastGroundedTime = Time.time;
+        if (jumpPressed) lastPressedTime = Time.time;
+
+        bool canJump = Time.time - lastGroundedTime <= coyoteTime;    // coyote time: still counts as standing
+        bool wantJump = Time.time - lastPressedTime <= jumpBuffer;    // jump buffer: the press is remembered
+        if (canJump && wantJump && !jumpQueued)
+        {
+            jumpQueued = true;
+            lastGroundedTime = -1f;          // the jump uses up both windows
+            lastPressedTime = -1f;
+        }
     }
 
     void FixedUpdate()
@@ -61,6 +78,10 @@ public class PlayerController : MonoBehaviour
             rb.AddForce(Vector3.up * rb.mass * v0, ForceMode.Impulse);                        // an impulse is divided by the mass
             jumpQueued = false;
         }
+
+        // fall faster than we rise: extra gravity while falling, so the apex stays the same but the fall is shorter
+        if (rb.linearVelocity.y < 0f)
+            rb.AddForce(Physics.gravity * (fallMultiplier - 1f), ForceMode.Acceleration);
     }
 
     // select the Player to see the ground check: green when it touches ground, red when it does not
