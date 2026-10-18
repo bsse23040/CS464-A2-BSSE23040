@@ -32,6 +32,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] float minFallSpeed = 3f;          // m/s: a small drop, like a stair step, does not squash
 
     Rigidbody rb;
+    Transform cam;
     InputAction moveAction, jumpAction;
     Vector3 move;                                      // built in Update, used in FixedUpdate
     bool isGrounded, jumpQueued;
@@ -45,6 +46,7 @@ public class PlayerController : MonoBehaviour
         rb = GetComponent<Rigidbody>();
         rb.freezeRotation = true;
         rb.interpolation = RigidbodyInterpolation.Interpolate;
+        cam = Camera.main != null ? Camera.main.transform : null;
 
         // the project-wide actions asset (Assets/InputSystem_Actions.inputactions)
         moveAction = InputSystem.actions.FindAction("Move");
@@ -55,7 +57,14 @@ public class PlayerController : MonoBehaviour
     {
         // read the keys here: a key press only lasts one frame, and FixedUpdate does not run every frame
         Vector2 input = moveAction.ReadValue<Vector2>();
-        move = Vector3.ClampMagnitude(new Vector3(input.x, 0f, input.y), 1f);   // diagonals are not faster
+
+        // W walks away from the camera, whichever way it faces: use the camera's flat forward and right
+        if (cam == null && Camera.main != null) cam = Camera.main.transform;
+        Vector3 forward = cam != null ? cam.forward : Vector3.forward;
+        Vector3 right = cam != null ? cam.right : Vector3.right;
+        forward.y = 0f; forward.Normalize();           // flat on the ground, then length 1 again
+        right.y = 0f; right.Normalize();
+        move = Vector3.ClampMagnitude(forward * input.y + right * input.x, 1f);   // diagonals are not faster
 
         bool jumpPressed = jumpAction.WasPressedThisFrame();
 

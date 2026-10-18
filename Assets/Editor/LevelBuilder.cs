@@ -3,6 +3,7 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 // Builds the greybox prefab kit and the five blockout levels.
 // Menu: CS464 > Build Kit + Levels. Batch: -executeMethod LevelBuilder.BuildAll
@@ -106,6 +107,19 @@ public static class LevelBuilder
         Save(root, "Player", false);
     }
 
+    // One camera prefab for every level. Its target is empty, so CameraFollow finds the player in Awake.
+    static void BuildCamera()
+    {
+        var go = new GameObject("Camera");
+        go.tag = "MainCamera";
+        var cam = go.AddComponent<Camera>();
+        cam.fieldOfView = 60f; cam.nearClipPlane = 0.3f; cam.farClipPlane = 500f;
+        go.AddComponent<AudioListener>();
+        go.AddComponent<UniversalAdditionalCameraData>();
+        go.AddComponent<CameraFollow>();
+        Save(go, "Camera", false);
+    }
+
     static void BuildKit()
     {
         EnsureFolder("Assets", "Prefabs"); EnsureFolder("Assets", "Materials"); EnsureFolder("Assets", "Scenes");
@@ -133,6 +147,7 @@ public static class LevelBuilder
         Save(Prim(PrimitiveType.Sphere, "Coin", Vector3.zero, new Vector3(.4f, .4f, .4f), coin, null, false), "Coin", false);
         Save(Prim(PrimitiveType.Cube, "SpawnPad", Vector3.zero, new Vector3(3, .1f, 3), spawn), "SpawnPad");
         BuildPlayer(player);
+        BuildCamera();
 
         var door = new GameObject("WallDoor"); // 4 m module, 2 m x 2.5 m opening
         Prim(PrimitiveType.Cube, "JambL", new Vector3(-1.5f, 1.5f, 0), new Vector3(1, 3, .4f), wall, door.transform);
