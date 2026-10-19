@@ -3,6 +3,7 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 // Builds the greybox prefab kit and the five blockout levels.
 // Menu: CS464 > Build Kit + Levels. Batch: -executeMethod LevelBuilder.BuildAll
@@ -52,10 +53,71 @@ public static class LevelBuilder
         return g;
     }
 
-    static void Save(GameObject g, string name)
+    const int GroundLayer = 6;   // the "Ground" layer in ProjectSettings/TagManager.asset
+    static void SetLayerAll(GameObject g, int layer) { g.layer = layer; foreach (Transform t in g.transform) SetLayerAll(t.gameObject, layer); }
+
+    // everything the player can stand on goes on the Ground layer, so the player's ground check can ignore itself
+    static void Save(GameObject g, string name, bool ground = true)
     {
+        if (ground) SetLayerAll(g, GroundLayer);
         prefabs[name] = PrefabUtility.SaveAsPrefabAsset(g, PrefabDir + "/" + name + ".prefab");
         Object.DestroyImmediate(g);
+    }
+
+    // zero friction with Friction Combine = Minimum, so the player does not stick to walls in mid-air
+    static PhysicsMaterial NoFriction()
+    {
+        const string path = "Assets/Materials/PlayerNoFriction.asset";
+        var m = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(path);
+        if (m == null) { m = new PhysicsMaterial("PlayerNoFriction"); AssetDatabase.CreateAsset(m, path); }
+        m.dynamicFriction = 0f; m.staticFriction = 0f; m.bounciness = 0f;
+        m.frictionCombine = PhysicsMaterialCombine.Minimum;
+        EditorUtility.SetDirty(m);
+        return m;
+    }
+
+    // The Player: an empty root with a Rigidbody, a capsule collider (height 2, radius 0.5) and PlayerController.
+    // The mesh is a child, Body, with no collider. The pivot is at the player's feet.
+    static void BuildPlayer(Material mat)
+    {
+        var root = new GameObject("Player");
+        var rb = root.AddComponent<Rigidbody>();
+        rb.mass = 1f;
+        rb.constraints = RigidbodyConstraints.FreezeRotation;
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
+        rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+
+        var col = root.AddComponent<CapsuleCollider>();
+        col.height = 2f; col.radius = 0.5f; col.center = new Vector3(0, 1, 0);
+        col.sharedMaterial = NoFriction();
+
+        var bodyMesh = Prim(PrimitiveType.Capsule, "Body", new Vector3(0, 1, 0), Vector3.one, mat, root.transform, false);
+
+        var feet = new GameObject("Feet");
+        feet.transform.SetParent(root.transform, false);
+        feet.transform.localPosition = new Vector3(0, 0.35f, 0);     // a 0.4 m sphere here reaches 5 cm below the feet
+
+        var pc = root.AddComponent<PlayerController>();
+        var so = new SerializedObject(pc);
+        so.FindProperty("feet").objectReferenceValue = feet.transform;
+        so.FindProperty("body").objectReferenceValue = bodyMesh.transform;
+        so.FindProperty("groundMask").intValue = 1 << GroundLayer;
+        so.ApplyModifiedPropertiesWithoutUndo();
+
+        Save(root, "Player", false);
+    }
+
+    // One camera prefab for every level. Its target is empty, so CameraFollow finds the player in Awake.
+    static void BuildCamera()
+    {
+        var go = new GameObject("Camera");
+        go.tag = "MainCamera";
+        var cam = go.AddComponent<Camera>();
+        cam.fieldOfView = 60f; cam.nearClipPlane = 0.3f; cam.farClipPlane = 500f;
+        go.AddComponent<AudioListener>();
+        go.AddComponent<UniversalAdditionalCameraData>();
+        go.AddComponent<CameraFollow>();
+        Save(go, "Camera", false);
     }
 
     static void BuildKit()
@@ -81,10 +143,11 @@ public static class LevelBuilder
         Save(Prim(PrimitiveType.Cube, "Step", Vector3.zero, new Vector3(3, .3f, .6f), floor), "Step");
         Save(Prim(PrimitiveType.Cube, "Ramp", Vector3.zero, new Vector3(4, .3f, 7), floor), "Ramp");
         Save(Prim(PrimitiveType.Cube, "Landmark", Vector3.zero, new Vector3(2, 14, 2), lmk), "Landmark");
-        Save(Prim(PrimitiveType.Cube, "Strip", Vector3.zero, new Vector3(1, .05f, 1), strip, null, false), "Strip");
-        Save(Prim(PrimitiveType.Sphere, "Coin", Vector3.zero, new Vector3(.4f, .4f, .4f), coin, null, false), "Coin");
+        Save(Prim(PrimitiveType.Cube, "Strip", Vector3.zero, new Vector3(1, .05f, 1), strip, null, false), "Strip", false);
+        Save(Prim(PrimitiveType.Sphere, "Coin", Vector3.zero, new Vector3(.4f, .4f, .4f), coin, null, false), "Coin", false);
         Save(Prim(PrimitiveType.Cube, "SpawnPad", Vector3.zero, new Vector3(3, .1f, 3), spawn), "SpawnPad");
-        Save(Prim(PrimitiveType.Capsule, "Player", Vector3.zero, Vector3.one, player), "Player"); // 2 m tall, 1 m wide
+        BuildPlayer(player);
+        BuildCamera();
 
         var door = new GameObject("WallDoor"); // 4 m module, 2 m x 2.5 m opening
         Prim(PrimitiveType.Cube, "JambL", new Vector3(-1.5f, 1.5f, 0), new Vector3(1, 3, .4f), wall, door.transform);
@@ -102,7 +165,7 @@ public static class LevelBuilder
         var l = new GameObject("LightPoint");
         var lt = l.AddComponent<Light>();
         lt.type = LightType.Point; lt.color = new Color(1f, .85f, .6f); lt.intensity = 25f; lt.range = 14f;
-        Save(l, "LightPoint");
+        Save(l, "LightPoint", false);
         AssetDatabase.SaveAssets();
     }
 
@@ -189,14 +252,15 @@ public static class LevelBuilder
     static void Begin()
     {
         EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+        if (Camera.main != null) Object.DestroyImmediate(Camera.main.gameObject);   // every level uses the Camera prefab instead
+        var cam = (GameObject)PrefabUtility.InstantiatePrefab(prefabs["Camera"]);
+        cam.name = "Camera";
         root = new GameObject("Level").transform; group = null;
     }
     static void Spawn(float x, float y, float z)
     {
         var p = Raw("SpawnPad", new Vector3(x, y + .05f, z)); p.name = "Spawn";
-        var pl = Raw("Player", new Vector3(x, y + 1f, z)); pl.name = "Player";
-        var cam = Camera.main;
-        if (cam != null) { cam.transform.position = new Vector3(x, y + 4f, z - 8f); cam.transform.rotation = Quaternion.Euler(18, 0, 0); }
+        var pl = Raw("Player", new Vector3(x, y + .12f, z)); pl.name = "Player";   // the pivot is at the feet; the pad's top is at y + 0.1
     }
     static void Goal(float x, float y, float z) { var g = Raw("Goal", new Vector3(x, y, z)); g.name = "Goal"; }
 
@@ -335,6 +399,14 @@ public static class LevelBuilder
         RampZ(0, 69, 0, 76, 2.4f, 4); Block(-3, 76, 3, 80, 2.4f);
         Group("Goal"); Block(-4, 82.8f, 4, 90, 2.4f); Goal(0, 2.4f, 86);
         Finish(5);
+    }
+
+    [MenuItem("CS464/Build Kit Only")]
+    public static void BuildKitOnly()
+    {
+        BuildKit();
+        AssetDatabase.SaveAssets();
+        Debug.Log("[LevelBuilder] kit built");
     }
 
     [MenuItem("CS464/Build Kit + Levels")]

@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 6923830166437370146}
   - component: {fileID: 5663962340406552471}
   - component: {fileID: 742213075771637182}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Lintel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -121,7 +121,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7520884822897207454}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: WallDoor
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -158,7 +158,7 @@ GameObject:
   - component: {fileID: 5237238773624149401}
   - component: {fileID: 3914419521027891375}
   - component: {fileID: 2840120904209039939}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: JambR
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -270,7 +270,7 @@ GameObject:
   - component: {fileID: 2113246353319837907}
   - component: {fileID: 7896253794466654923}
   - component: {fileID: 7548460436031624022}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: JambL
   m_TagString: Untagged
   m_Icon: {fileID: 0}

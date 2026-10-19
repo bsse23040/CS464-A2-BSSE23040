@@ -1,0 +1,155 @@
+using System.Collections;
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+/// <summary>
+/// Moves and jumps the player. The keys are read in Update, and the physics is done in FixedUpdate.
+/// </summary>
+[RequireComponent(typeof(Rigidbody))]
+[RequireComponent(typeof(CapsuleCollider))]
+public class PlayerController : MonoBehaviour
+{
+    [Header("Move")]
+    [SerializeField] float speed = 5f;                 // metres per second
+
+    [Header("Jump")]
+    [SerializeField] float jumpHeight = 1.8f;          // metres
+    [SerializeField] float fallMultiplier = 2.2f;      // extra gravity on the way down only
+    [SerializeField] float coyoteTime = 0.1f;          // a press this long after leaving a ledge still jumps
+    [SerializeField] float jumpBuffer = 0.12f;         // a press this long before landing jumps when we land
+
+    [Header("Ground check")]
+    [SerializeField] Transform feet;                   // the check sphere is centred here
+    [SerializeField] float checkRadius = 0.4f;         // a bit smaller than the capsule, so a wall never counts as ground
+    [SerializeField] LayerMask groundMask;             // only the Ground layer, never the player's own capsule
+
+    [Header("Juice: squash on landing")]
+    [SerializeField] Transform body;                   // the mesh child. It is squashed, the collider keeps its size
+    [SerializeField] float squashDuration = 0.35f;     // seconds
+    [SerializeField] float softSquash = 0.85f;         // body height after the lightest landing that squashes
+    [SerializeField] float hardSquash = 0.7f;          // body height after a hard landing
+    [SerializeField] float minAirTime = 0.1f;          // seconds in the air before a landing counts
+    [SerializeField] float minFallSpeed = 3f;          // m/s: a small drop, like a stair step, does not squash
+
+    Rigidbody rb;
+    Transform cam;
+    InputAction moveAction, jumpAction;
+    Vector3 move;                                      // built in Update, used in FixedUpdate
+    bool isGrounded, jumpQueued;
+    float lastGroundedTime = -1f, lastPressedTime = -1f;   // both windows are timestamps, checked in Update
+    float airTime, fallSpeed;
+    bool wasGrounded;
+    Coroutine squash;
+
+    void Awake()
+    {
+        rb = GetComponent<Rigidbody>();
+        rb.freezeRotation = true;
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
+        cam = Camera.main != null ? Camera.main.transform : null;
+
+        // the project-wide actions asset (Assets/InputSystem_Actions.inputactions)
+        moveAction = InputSystem.actions.FindAction("Move");
+        jumpAction = InputSystem.actions.FindAction("Jump");
+    }
+
+    void Update()
+    {
+        // read the keys here: a key press only lasts one frame, and FixedUpdate does not run every frame
+        Vector2 input = moveAction.ReadValue<Vector2>();
+
+        // W walks away from the camera, whichever way it faces: use the camera's flat forward and right
+        if (cam == null && Camera.main != null) cam = Camera.main.transform;
+        Vector3 forward = cam != null ? cam.forward : Vector3.forward;
+        Vector3 right = cam != null ? cam.right : Vector3.right;
+        forward.y = 0f; forward.Normalize();           // flat on the ground, then length 1 again
+        right.y = 0f; right.Normalize();
+        move = Vector3.ClampMagnitude(forward * input.y + right * input.x, 1f);   // diagonals are not faster
+
+        bool jumpPressed = jumpAction.WasPressedThisFrame();
+
+        // stamp the ground only when no jump is queued and we are not rising, or a quick second press would jump again
+        if (isGrounded && !jumpQueued && rb.linearVelocity.y <= 0f) lastGroundedTime = Time.time;
+        if (jumpPressed) lastPressedTime = Time.time;
+
+        bool canJump = Time.time - lastGroundedTime <= coyoteTime;    // coyote time: still counts as standing
+        bool wantJump = Time.time - lastPressedTime <= jumpBuffer;    // jump buffer: the press is remembered
+        if (canJump && wantJump && !jumpQueued)
+        {
+            jumpQueued = true;
+            lastGroundedTime = -1f;          // the jump uses up both windows
+            lastPressedTime = -1f;
+        }
+
+        // the landing that starts the juice
+        if (!isGrounded)
+        {
+            airTime += Time.deltaTime;
+            // Dot with Vector3.down is positive while we move down and negative while we rise
+            fallSpeed = Mathf.Max(fallSpeed, Vector3.Dot(rb.linearVelocity, Vector3.down));
+        }
+        else
+        {
+            if (!wasGrounded && airTime > minAirTime && fallSpeed > minFallSpeed) StartSquash(fallSpeed);
+            airTime = 0f;
+            fallSpeed = 0f;
+        }
+        wasGrounded = isGrounded;
+    }
+
+    void FixedUpdate()
+    {
+        isGrounded = Physics.CheckSphere(feet.position, checkRadius, groundMask, QueryTriggerInteraction.Ignore);
+
+        // a velocity is in metres per second: no deltaTime here, the physics step does that
+        rb.linearVelocity = new Vector3(move.x * speed, rb.linearVelocity.y, move.z * speed);
+
+        if (jumpQueued)
+        {
+            // rising speed v against gravity g stops at height h = v^2 / 2g, so v = sqrt(2 g h)
+            float g = -Physics.gravity.y;
+            float v0 = Mathf.Sqrt(2f * g * jumpHeight);
+
+            rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);   // so a jump taken on the way down is not short
+            rb.AddForce(Vector3.up * rb.mass * v0, ForceMode.Impulse);                        // an impulse is divided by the mass
+            jumpQueued = false;
+        }
+
+        // fall faster than we rise: extra gravity while falling, so the apex stays the same but the fall is shorter
+        if (rb.linearVelocity.y < 0f)
+            rb.AddForce(Physics.gravity * (fallMultiplier - 1f), ForceMode.Acceleration);
+    }
+
+    void StartSquash(float impact)
+    {
+        if (body == null) return;
+        if (squash != null) StopCoroutine(squash);                   // stop a running one first
+        float hard = Mathf.InverseLerp(minFallSpeed, 9f, impact);    // 0 for a soft landing, 1 for a hard one
+        squash = StartCoroutine(Squash(Mathf.Lerp(softSquash, hardSquash, hard)));
+    }
+
+    // squashed at p = 0, at rest at p = 1, with a small overshoot from Ease.OutBack
+    IEnumerator Squash(float lowestHeight)
+    {
+        for (float elapsed = 0f; elapsed < squashDuration; elapsed += Time.deltaTime)
+        {
+            float p = Ease.OutBack(elapsed / squashDuration);
+            float y = Mathf.LerpUnclamped(lowestHeight, 1f, p);      // unclamped, or the overshoot is cut flat
+            float xz = 1f / Mathf.Sqrt(y);                           // keep the volume: at y 0.7, x and z are about 1.2
+            body.localScale = new Vector3(xz, y, xz);
+            body.localPosition = new Vector3(0f, y, 0f);             // the body is 2 m tall around its middle, so its feet stay put
+            yield return null;
+        }
+        body.localScale = Vector3.one;                               // exactly at rest
+        body.localPosition = new Vector3(0f, 1f, 0f);
+        squash = null;
+    }
+
+    // select the Player to see the ground check: green when it touches ground, red when it does not
+    void OnDrawGizmosSelected()
+    {
+        Vector3 centre = feet != null ? feet.position : transform.position;
+        Gizmos.color = isGrounded ? Color.green : Color.red;
+        Gizmos.DrawWireSphere(centre, checkRadius);
+    }
+}
